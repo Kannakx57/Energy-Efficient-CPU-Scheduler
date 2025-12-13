@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Intelligent CPU Scheduler Simulator (HTML)</title>
+<style>
+  :root{
+    --bg:#0f1724; --card:#0b1220; --muted:#9aa7bd; --accent:#6ee7b7;
+    --glass: rgba(255,255,255,0.04);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  body{ margin:0; background:linear-gradient(180deg,#071021 0%, #061227 100%); color:#e6eef6; min-height:100vh; padding:28px; box-sizing:border-box;}
+  .wrap{ max-width:1200px; margin:0 auto; display:grid; gap:18px; grid-template-columns: 460px 1fr; }
+  .card{ background:var(--card); padding:14px; border-radius:12px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03);}
+  h1{ margin:0 0 8px 0; font-size:20px;}
+  label{ font-size:13px; color:var(--muted); display:block; margin-bottom:6px;}
+  textarea,input,select{ width:100%; background:var(--glass); border:1px solid rgba(255,255,255,0.04); color:inherit; padding:8px 10px; border-radius:8px; box-sizing:border-box; font-family:inherit; font-size:13px;}
+  .row{ display:flex; gap:10px; align-items:center; }
+  .controls{ display:flex; gap:8px; margin-top:10px; }
+  button{ background:linear-gradient(90deg,#2b6b8a,#2b8a6b); color:#041022; border:none; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600;}
+  button.secondary{ background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.04); }
+  .muted{ color:var(--muted); font-size:13px;}
+  .canvas-wrap{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:14px; border-radius:12px;}
+  #gantt{ width:100%; height:220px; background:#02121a; border-radius:8px; display:block; }
+  table{ width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;}
+  th,td{ padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,0.03); text-align:left;}
+  .small{ font-size:12px; color:var(--muted); }
+  .legend{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .legend .item{ display:flex; gap:6px; align-items:center; padding:6px 8px; background:rgba(255,255,255,0.02); border-radius:8px; font-size:12px;}
+  .color-box{ width:14px; height:14px; border-radius:4px; box-shadow: inset 0 -2px 3px rgba(0,0,0,0.2);}
+  .topbar{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;}
+  footer{ grid-column:1 / -1; text-align:center; color:var(--muted); font-size:13px; margin-top:8px;}
+  @media (max-width:980px){ .wrap{ grid-template-columns: 1fr; } .canvas-wrap{ order: -1; } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="topbar">
+        <div>
+          <h1>Intelligent CPU Scheduler Simulator</h1>
+          <div class="small">Paste processes as <code>PID,arrival,burst,priority</code> (priority optional)</div>
+        </div>
+        <div class="small">No libraries — pure HTML/JS</div>
+      </div>
+
+      <label for="procInput">Process list (one per line)</label>
+      <textarea id="procInput" rows="9">P1,0,5,2
+P2,1,3,1
+P3,2,8,3
+P4,3,6,2</textarea>
+
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <div style="flex:1">
+          <label>Algorithm</label>
+          <select id="algoSelect">
+            <option>FCFS</option>
+            <option>SJF</option>
+            <option>RR</option>
+            <option>Priority</option>
+          </select>
+        </div>
+        <div style="width:120px;">
+          <label>Preemptive?</label>
+          <select id="preemptSelect">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+        </div>
+        <div style="width:120px;">
+          <label>Time quantum</label>
+          <input id="quantum" value="2" />
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="runBtn">RUN</button>
+        <button id="clearBtn" class="secondary">CLEAR</button>
+        <button id="exampleBtn" class="secondary">LOAD EXAMPLE</button>
+        <div style="flex:1"></div>
+        <div class="muted">Step resolution: 1 unit</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="small">Per-process metrics</div>
+        <table id="metricsTable">
+          <thead><tr><th>PID</th><th>Arrival</th><th>Burst</th><th>Waiting</th><th>Turnaround</th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr><td colspan="3" class="small">Averages</td><td id="avgWait" class="small">-</td><td id="avgTurn" class="small">-</td></tr></tfoot>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="card canvas-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="small">Gantt Chart</div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div style="text-align:right;">
+          <div class="small">Right-click canvas to save as PNG</div>
+        </div>
+      </div>
+      <canvas id="gantt"></canvas>
+      <div id="scheduleText" class="small" style="margin-top:8px; white-space:pre-wrap; font-family:monospace;"></div>
+    </div>
+
+    <footer class="small">Created for CA2 project — Intelligent CPU Scheduler Simulator</footer>
+  </div>
+
+<script>
+/* ---------- Utilities ---------- */
+function parseInput(text){
+  const lines = text.split('\\n').map(l=>l.trim()).filter(Boolean);
+  const procs = [];
+  for(const ln of lines){
+    const parts = ln.split(',').map(p=>p.trim());
+    if(parts.length < 3) throw new Error("Each line must be: PID,arrival,burst[,priority]");
+    const pid = parts[0] || ("P"+(procs.length+1));
+    const arrival = Number(parts[1]);
+    const burst = Number(parts[2]);
+    const priority = parts.length >= 4 ? Number(parts[3]) : 0;
+    if(isNaN(arrival)|| isNaN(burst) || burst<=0) throw new Error("Arrival & burst must be numbers; burst > 0");
+    procs.push({pid, arrival, burst, priority, burstOriginal:burst});
+  }
+  return procs;
+}
+function cloneProcs(procs){ return procs.map(p=> ({...p})); }
+function uidColor(i){
+  // generate pleasant distinct colors
+  const hues = [200, 160, 100, 40, 10, 280, 220, 130, 60, 330];
+  const h = hues[i % hues.length];
+  return hsl(${h} ${60 + (i%3)*8}% 50%);
+}
+
+/* ---------- Schedulers (unit time = 1) ---------- */
+function schedule_fcfs(procs){
+  const p = cloneProcs(procs).sort((a,b)=> a.arrival - b.arrival || a.pid.localeCompare(b.pid));
+  let t = 0; const schedule=[];
+  for(const pr of p){
+    if(t < pr.arrival){
+      schedule.push({pid:'Idle', start:t, end:pr.arrival});
+      t = pr.arrival;
+    }
+    schedule.push({pid:pr.pid, start:t, end:t+pr.burst});
+    t += pr.burst;
+  }
+  return schedule;
+}
+
+function schedule_sjf_nonpreemptive(procs){
+  const procsLeft = cloneProcs(procs);
+  let t = 0; const schedule=[]; const done = new Set();
+  while(done.size < procsLeft.length){
+    const arrived = procsLeft.filter(x=> x.arrival <= t && !done.has(x.pid));
+    if(arrived.length === 0){
+      const next = procsLeft.filter(x=> !done.has(x.pid)).reduce((a,b)=> a.arrival < b.arrival ? a : b);
+      schedule.push({pid:'Idle', start:t, end: next.arrival});
+      t = next.arrival;
+      continue;
+    }
+    arrived.sort((a,b)=> a.burst - b.burst || a.arrival - b.arrival);
+    const cur = arrived[0];
+    schedule.push({pid:cur.pid, start:t, end: t + cur.burst});
+    t += cur.burst; done.add(cur.pid);
+  }
+  return schedule;
+}
+
+function schedule_sjf_preemptive(procs){
+  // Shortest Remaining Time First (step = 1)
+  const map = {}; for(const p of procs) map[p.pid] = {arrival:p.arrival, rem:p.burst, burst:p.burst};
+  let t = 0; const schedule = []; const n = procs.length; const finished = new Set();
+  let last = null;
+  while(finished.size < n){
+    const arrived = Object.keys(map).filter(pid=> map[pid].arrival <= t && !finished.has(pid) && map[pid].rem>0);
+    if(arrived.length===0){
+      const nextArr = Math.min(...Object.keys(map).filter(pid=> !finished.has(pid)).map(pid=> map[pid].arrival));
+      schedule.push({pid:'Idle', start:t, end: nextArr});
+      t = nextArr; last = null; continue;
+    }
+    // pick smallest remaining
+    arrived.sort((a,b)=> map[a].rem - map[b].rem || map[a].arrival - map[b].arrival);
+    const cur = arrived[0];
+    if(last === cur && schedule.length && schedule[schedule.length-1].pid === cur){
+      schedule[schedule.length-1].end += 1;
+    } else {
+      schedule.push({pid:cur, start:t, end:t+1});
+    }
+    map[cur].rem -= 1; t += 1;
+    if(map[cur].rem <= 0) finished.add(cur);
+    last = cur;
+  }
+  return mergeSchedule(schedule);
+}
+
+function schedule_priority_nonpreemptive(procs){
+  const procsLeft = cloneProcs(procs);
+  let t = 0; const schedule=[]; const done = new Set();
+  while(done.size < procsLeft.length){
+    const arrived = procsLeft.filter(x=> x.arrival <= t && !done.has(x.pid));
+    if(arrived.length === 0){
+      const next = procsLeft.filter(x=> !done.has(x.pid)).reduce((a,b)=> a.arrival < b.arrival ? a : b);
+      schedule.push({pid:'Idle', start:t, end: next.arrival});
+      t = next.arrival;
+      continue;
+    }
+    arrived.sort((a,b)=> a.priority - b.priority || a.arrival - b.arrival);
+    const cur = arrived[0];
+    schedule.push({pid:cur.pid, start:t, end: t + cur.burst});
+    t += cur.burst; done.add(cur.pid);
+  }
+  return schedule;
+}
+
+function schedule_priority_preemptive(procs){
+  const map = {}; for(const p of procs) map[p.pid] = {arrival:p.arrival, rem:p.burst, priority:p.priority};
+  let t=0; const schedule=[]; const n=procs.length; const finished=new Set(); let last=null;
+  while(finished.size<n){
+    const arrived = Object.keys(map).filter(pid=> map[pid].arrival <= t && !finished.has(pid) && map[pid].rem>0);
+    if(arrived.length===0){
+      const nextArr = Math.min(...Object.keys(map).filter(pid=> !finished.has(pid)).map(pid=> map[pid].arrival));
+      schedule.push({pid:'Idle', start:t, end: nextArr});
+      t = nextArr; last=null; continue;
+    }
+    arrived.sort((a,b)=> map[a].priority - map[b].priority || map[a].arrival - map[b].arrival);
+    const cur = arrived[0];
+    if(last === cur && schedule.length && schedule[schedule.length-1].pid === cur){
+      schedule[schedule.length-1].end += 1;
+    } else {
+      schedule.push({pid:cur, start:t, end:t+1});
+    }
+    map[cur].rem -= 1; t += 1;
+    if(map[cur].rem <= 0) finished.add(cur);
+    last = cur;
+  }
+  return mergeSchedule(schedule);
+}
+
+function schedule_rr(procs, quantum){
+  const map = {}; for(const p of procs) map[p.pid] = {arrival:p.arrival, rem:p.burst};
+  const sorted = cloneProcs(procs).sort((a,b)=> a.arrival - b.arrival || a.pid.localeCompare(b.pid));
+  let t = 0; let i = 0; const queue = []; const schedule = []; const finished = new Set();
+  while(finished.size < procs.length){
+    while(i < sorted.length && sorted[i].arrival <= t){ if(!queue.includes(sorted[i].pid)) queue.push(sorted[i].pid); i++; }
+    if(queue.length === 0){
+      if(i < sorted.length){
+        const nextArr = sorted[i].arrival;
+        schedule.push({pid:'Idle', start:t, end: nextArr});
+        t = nextArr; continue;
+      } else break;
+    }
+    const cur = queue.shift();
+    if(map[cur].rem <= 0) { continue; }
+    const run = Math.min(quantum, map[cur].rem);
+    schedule.push({pid:cur, start:t, end: t + run});
+    t += run; map[cur].rem -= run;
+    // add newly arrived while running
+    while(i < sorted.length && sorted[i].arrival <= t){ if(!queue.includes(sorted[i].pid) && sorted[i].pid !== cur) queue.push(sorted[i].pid); i++; }
+    if(map[cur].rem > 0) queue.push(cur); else finished.add(cur);
+  }
+  return mergeSchedule(schedule);
+}
+
+function mergeSchedule(schedule){
+  if(!schedule.length) return [];
+  const merged = [ {...schedule[0]} ];
+  for(let k=1;k<schedule.length;k++){
+    const cur = schedule[k], last = merged[merged.length-1];
+    if(cur.pid === last.pid && Math.abs(cur.start - last.end) < 1e-9){
+      last.end = cur.end;
+    } else merged.push({...cur});
+  }
+  return merged;
+}
+
+/* ---------- Metrics ---------- */
+function computeMetrics(schedule, procs){
+  const finish = {}; const firstStart = {};
+  for(const seg of schedule){
+    finish[seg.pid] = seg.end; // last end is finish
+    if(!(seg.pid in firstStart) && seg.pid !== 'Idle') firstStart[seg.pid] = seg.start;
+  }
+  const metrics = {};
+  for(const p of procs){
+    const pid = p.pid; const arrival = p.arrival; const burst = p.burstOriginal;
+    if(!(pid in finish)) { metrics[pid] = {waiting:NaN, turnaround:NaN}; continue; }
+    const turnaround = finish[pid] - arrival;
+    const waiting = turnaround - burst;
+    metrics[pid] = {waiting, turnaround};
+  }
+  const n = procs.length;
+  const avgWait = procs.reduce((s,p)=> s + (metrics[p.pid].waiting || 0), 0) / n;
+  const avgTurn = procs.reduce((s,p)=> s + (metrics[p.pid].turnaround || 0), 0) / n;
+  return {metrics, avgWait, avgTurn};
+}
+
+/* ---------- Rendering ---------- */
+function drawGantt(schedule, container){
+  const canvas = container;
+  const ctx = canvas.getContext('2d');
+  // compute time range
+  const minT = Math.min(...schedule.map(s=> s.start));
+  const maxT = Math.max(...schedule.map(s=> s.end));
+  const padding = 60;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  canvas.width = Math.max(800, Math.floor(width * devicePixelRatio));
+  canvas.height = Math.max(220, Math.floor(height * devicePixelRatio));
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.clearRect(0,0,width,height);
+  ctx.fillStyle = '#03121a'; ctx.fillRect(0,0,width,height);
+  // unique pids (exclude Idle for ordering)
+  const pids = [...new Set(schedule.filter(s=>s.pid!=='Idle').map(s=> s.pid))];
+  if(schedule.some(s=> s.pid === 'Idle')) pids.push('Idle');
+  const rowH = 30; const top = 30;
+  const totalHeight = top + pids.length * (rowH + 6) + 40;
+  // axis scale
+  const scale = (width - padding*1.5) / (maxT - minT || 1);
+  // draw rows and labels
+  ctx.font = "12px Inter, Arial"; ctx.textBaseline='middle';
+  for(let i=0;i<pids.length;i++){
+    const y = top + i * (rowH + 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(40, y, width-80, rowH);
+    ctx.fillStyle = '#cfe7ef'; ctx.fillText(pids[i], 8, y + rowH/2);
+  }
+  // draw segments
+  const colorMap = {};
+  pids.forEach((pid, i)=> colorMap[pid] = uidColor(i));
+  for(const seg of schedule){
+    const pid = seg.pid; const s = seg.start; const e = seg.end;
+    const idx = pids.indexOf(pid);
+    const x = 40 + (s - minT) * scale;
+    const w = Math.max(2, (e - s) * scale);
+    const y = top + idx * (rowH + 6);
+    // draw rectangle
+    ctx.fillStyle = colorMap[pid];
+    ctx.fillRect(x, y + 4, w, rowH - 8);
+    // label
+    ctx.fillStyle = '#041022';
+    ctx.font = "12px Inter, Arial";
+    ctx.textAlign = 'center';
+    ctx.fillText(pid, x + w/2, y + rowH/2 + 1);
+    // times
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.textAlign = 'left';
+    ctx.font = "11px Inter, Arial";
+    ctx.fillText(String(s), x, y + rowH + 12);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(e), x + w, y + rowH + 12);
+  }
+  // x axis
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(40, top + pids.length * (rowH + 6), width-80, 1);
+  // legend
+  const legendEl = document.getElementById('legend'); legendEl.innerHTML = '';
+  pids.forEach((pid,i)=>{
+    const d = document.createElement('div'); d.className='item';
+    const cb = document.createElement('span'); cb.className='color-box'; cb.style.background = colorMap[pid];
+    d.appendChild(cb); const t = document.createElement('span'); t.textContent = pid; d.appendChild(t);
+    legendEl.appendChild(d);
+  });
+}
+
+/* ---------- UI glue ---------- */
+document.getElementById('exampleBtn').addEventListener('click', ()=> {
+  document.getElementById('procInput').value = "P1,0,5,2\\nP2,1,3,1\\nP3,2,8,3\\nP4,3,6,2";
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  document.getElementById('procInput').value = "";
+  document.getElementById('scheduleText').textContent = "";
+  document.querySelector('#metricsTable tbody').innerHTML = "";
+  document.getElementById('avgWait').textContent = "-";
+  document.getElementById('avgTurn').textContent = "-";
+  document.getElementById('legend').innerHTML = "";
+  const c = document.getElementById('gantt'); const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height);
+});
+
+document.getElementById('runBtn').addEventListener('click', ()=>{
+  try{
+    const raw = document.getElementById('procInput').value;
+    const procs = parseInput(raw);
+    const algo = document.getElementById('algoSelect').value;
+    const preempt = document.getElementById('preemptSelect').value === 'true';
+    const quantum = Number(document.getElementById('quantum').value) || 1;
+    let schedule = [];
+    if(algo === 'FCFS') schedule = schedule_fcfs(procs);
+    else if(algo === 'SJF') schedule = preempt ? schedule_sjf_preemptive(procs) : schedule_sjf_nonpreemptive(procs);
+    else if(algo === 'RR') schedule = schedule_rr(procs, quantum);
+    else if(algo === 'Priority') schedule = preempt ? schedule_priority_preemptive(procs) : schedule_priority_nonpreemptive(procs);
+    schedule = mergeSchedule(schedule);
+    // write schedule text
+    const schedText = schedule.map(s=> ${s.pid} [${s.start} , ${s.end}]).join('\\n');
+    document.getElementById('scheduleText').textContent = "Gantt schedule (pid, start, end):\\n" + schedText;
+    // metrics
+    const {metrics, avgWait, avgTurn} = computeMetrics(schedule, procs);
+    // fill table
+    const tbody = document.querySelector('#metricsTable tbody'); tbody.innerHTML = "";
+    for(const p of procs){
+      const tr = document.createElement('tr');
+      const tdPid = document.createElement('td'); tdPid.textContent = p.pid; tr.appendChild(tdPid);
+      const tdArr = document.createElement('td'); tdArr.textContent = p.arrival; tr.appendChild(tdArr);
+      const tdBurst = document.createElement('td'); tdBurst.textContent = p.burstOriginal; tr.appendChild(tdBurst);
+      const tdWait = document.createElement('td'); tdWait.textContent = (metrics[p.pid].waiting).toFixed(2); tr.appendChild(tdWait);
+      const tdTurn = document.createElement('td'); tdTurn.textContent = (metrics[p.pid].turnaround).toFixed(2); tr.appendChild(tdTurn);
+      tbody.appendChild(tr);
+    }
+    document.getElementById('avgWait').textContent = avgWait.toFixed(2);
+    document.getElementById('avgTurn').textContent = avgTurn.toFixed(2);
+    // draw Gantt
+    const canvas = document.getElementById('gantt');
+    // ensure canvas size (visual)
+    canvas.style.height = '260px';
+    drawGantt(schedule, canvas);
+  } catch(err){
+    alert("Error: " + err.message);
+    console.error(err);
+  }
+});
+
+/* Make canvas responsive */
+(function resizeCanvas(){
+  const c = document.getElementById('gantt');
+  function doResize(){ c.width = c.clientWidth * devicePixelRatio; c.height = c.clientHeight * devicePixelRatio; }
+  window.addEventListener('resize', ()=> { setTimeout(()=> { document.getElementById('runBtn').click(); }, 200); });
+  doResize();
+})();
+</script>
+</body>
+</html>
