@@ -1,286 +1,183 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Intelligent CPU Scheduler Simulator</title>
+<meta charset="UTF-8">
+<title>Energy-Efficient CPU Scheduling Simulator</title>
 
 <style>
-:root{
-  --bg-light:#f8fafc;
-  --card-light:#ffffff;
-  --border:#cbd5e1;
-  --text:#0f172a;
-  --accent:#4f46e5;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-}
-
 body{
-  margin:0;
-  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
-  color: #0a0b0a;
-  min-height: 100vh;
-  padding: 28px;
+    margin:0;
+    font-family:Arial, Helvetica, sans-serif;
+    background:#0f172a;
+    color:#e5e7eb;
 }
-
-
-/* Layout */
-.wrap{
-  max-width:1200px;
-  margin:0 auto;
-  display:grid;
-  gap:18px;
-  grid-template-columns:460px 1fr;
+header{
+    text-align:center;
+    padding:30px;
+    background:linear-gradient(135deg,#2563eb,#1e40af);
 }
-
-/* Cards */
+.container{
+    max-width:1000px;
+    margin:20px auto;
+    padding:20px;
+}
 .card{
-  background:var(--card-light);
-  padding:16px;
-  border-radius:12px;
-  box-shadow:0 8px 24px rgba(0,0,0,0.08);
+    background:#020617;
+    padding:20px;
+    margin-bottom:20px;
+    border-radius:12px;
+    box-shadow:0 8px 18px rgba(0,0,0,0.4);
 }
-
-/* Inputs */
-textarea,input,select{
-  width:100%;
-  background:#f1f5f9;
-  color:var(--text);
-  padding:8px;
-  border-radius:8px;
-  border:1px solid var(--border);
-  margin-bottom:10px;
+h2{
+    color:#60a5fa;
 }
-
-select option{
-  background:#ffffff;
-  color:#0f172a;
+input, button{
+    padding:8px;
+    margin:5px;
+    border-radius:6px;
+    border:none;
 }
-
-/* Buttons */
+input{
+    width:120px;
+}
 button{
-  background:var(--accent);
-  color:white;
-  border:none;
-  padding:8px 14px;
-  border-radius:10px;
-  cursor:pointer;
+    background:#22c55e;
+    color:#020617;
+    cursor:pointer;
+    font-weight:bold;
 }
-
-button.secondary{
-  background:none;
-  color:#475569;
-  border:1px solid var(--border);
+button:hover{
+    background:#16a34a;
 }
-
-/* Table */
 table{
-  width:100%;
-  border-collapse:collapse;
-  margin-top:10px;
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
 }
-
-th,td{
-  padding:8px;
-  border-bottom:1px solid var(--border);
-  text-align:center;
+th, td{
+    border:1px solid #334155;
+    padding:8px;
+    text-align:center;
 }
-
-/* Gantt */
-canvas{
-  width:100%;
-  height:260px;
-  background:#e5e7eb;
-  border-radius:8px;
+th{
+    background:#1e293b;
 }
-
-/* Legend */
-.legend{
-  display:flex;
-  gap:6px;
-  flex-wrap:wrap;
+.high{
+    color:#22c55e;
+    font-weight:bold;
 }
-
-.color-box{
-  width:14px;
-  height:14px;
-  border-radius:4px;
+.low{
+    color:#facc15;
+    font-weight:bold;
 }
-
-/* Footer */
-footer{
-  grid-column:1/-1;
-  text-align:center;
-  color:#475569;
-  font-size:13px;
-  margin-top:20px;
-}
-
-/* Responsive */
-@media(max-width:980px){
-  .wrap{grid-template-columns:1fr;}
+.activity{
+    padding:8px;
+    border-left:4px solid #60a5fa;
+    margin-bottom:6px;
 }
 </style>
 </head>
 
 <body>
-<div class="wrap">
 
-<!-- LEFT PANEL -->
+<header>
+    <h1>Energy-Efficient CPU Scheduling Simulator</h1>
+    <p>Interactive Activity-Based Website</p>
+</header>
+
+<div class="container">
+
 <div class="card">
-<h2>Intelligent CPU Scheduler Simulator</h2>
-
-<label>Process list (PID,Arrival,Burst,Priority)</label>
-<textarea id="procInput" rows="8">P1,0,5,2
-P2,1,3,1
-P3,2,8,3
-P4,3,6,2</textarea>
-
-<label>Algorithm</label>
-<select id="algoSelect">
-<option>FCFS</option>
-<option>SJF</option>
-<option>RR</option>
-<option>Priority</option>
-</select>
-
-<label>Preemptive?</label>
-<select id="preemptSelect">
-<option value="false">No</option>
-<option value="true">Yes</option>
-</select>
-
-<label>Time Quantum</label>
-<input id="quantum" value="2"/>
-
-<div style="margin-top:10px">
-<button id="runBtn">RUN</button>
-<button id="clearBtn" class="secondary">CLEAR</button>
+    <h2>Add Process</h2>
+    <input type="text" id="pid" placeholder="Process ID">
+    <input type="number" id="burst" placeholder="Burst Time">
+    <input type="number" id="priority" placeholder="Priority">
+    <button onclick="addProcess()">Add</button>
 </div>
 
-<table>
-<thead>
-<tr>
-<th>PID</th>
-<th>Arrival</th>
-<th>Burst</th>
-<th>Waiting</th>
-<th>Turnaround</th>
-</tr>
-</thead>
-<tbody id="metricsBody"></tbody>
-<tfoot>
-<tr>
-<td colspan="3"><b>Average</b></td>
-<td id="avgWait">-</td>
-<td id="avgTurn">-</td>
-</tr>
-</tfoot>
-</table>
-</div>
-
-<!-- RIGHT PANEL -->
 <div class="card">
-<div class="legend" id="legend"></div>
-<canvas id="gantt"></canvas>
-<pre id="scheduleText"></pre>
+    <h2>Process Table</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>PID</th>
+                <th>Burst Time</th>
+                <th>Priority</th>
+                <th>CPU Frequency</th>
+                <th>Energy</th>
+            </tr>
+        </thead>
+        <tbody id="ptable"></tbody>
+    </table>
 </div>
 
-<footer>
-© 2025 | Intelligent CPU Scheduler Simulator | Kanak Kr Raj
-</footer>
+<div class="card">
+    <h2>Run Energy-Efficient Scheduling</h2>
+    <button onclick="runScheduler()">Run Scheduler</button>
+</div>
+
+<div class="card">
+    <h2>Activity Log</h2>
+    <div id="activityLog"></div>
+</div>
 
 </div>
 
 <script>
-'use strict';
+let processes = [];
 
-function parseInput(text){
-  return text.split('\n').filter(Boolean).map(l=>{
-    const [pid,a,b,p=0]=l.split(',');
-    return { pid, arrival:+a, burst:+b, rem:+b, burstOriginal:+b };
-  });
-}
+function addProcess(){
+    let pid = document.getElementById("pid").value;
+    let burst = Number(document.getElementById("burst").value);
+    let priority = Number(document.getElementById("priority").value);
 
-function uidColor(i){
-  const hues=[210,170,120,60,300,330];
-  return `hsl(${hues[i%hues.length]},70%,55%)`;
-}
-
-function fcfs(p){
-  let t=0, s=[];
-  p.sort((a,b)=>a.arrival-b.arrival);
-  for(const x of p){
-    if(t<x.arrival){
-      s.push({pid:'Idle',start:t,end:x.arrival});
-      t=x.arrival;
+    if(pid === "" || burst <= 0){
+        alert("Enter valid process details");
+        return;
     }
-    s.push({pid:x.pid,start:t,end:t+x.burst});
-    t+=x.burst;
-  }
-  return s;
+
+    processes.push({pid, burst, priority});
+    renderTable();
 }
 
-function metrics(schedule,procs){
-  const finish={};
-  schedule.forEach(s=>finish[s.pid]=s.end);
+function runScheduler(){
+    processes.sort((a,b)=>a.priority - b.priority);
+    document.getElementById("activityLog").innerHTML = "";
 
-  let aw=0,at=0;
-  metricsBody.innerHTML="";
+    processes.forEach(p=>{
+        let freq = p.priority <= 3 ? "HIGH" : "LOW";
+        let voltage = freq === "HIGH" ? 1.2 : 0.8;
+        let f = freq === "HIGH" ? 2.5 : 1.2;
+        let energy = (voltage * voltage * f * p.burst).toFixed(2);
 
-  for(const p of procs){
-    const tat=finish[p.pid]-p.arrival;
-    const wt=tat-p.burstOriginal;
-    aw+=wt; at+=tat;
+        p.freq = freq;
+        p.energy = energy;
 
-    metricsBody.innerHTML+=`
-    <tr>
-      <td>${p.pid}</td>
-      <td>${p.arrival}</td>
-      <td>${p.burstOriginal}</td>
-      <td>${wt}</td>
-      <td>${tat}</td>
-    </tr>`;
-  }
+        log(`Process ${p.pid} executed at ${freq} frequency → Energy = ${energy}`);
+    });
 
-  avgWait.textContent=(aw/procs.length).toFixed(2);
-  avgTurn.textContent=(at/procs.length).toFixed(2);
+    renderTable();
 }
 
-function draw(schedule){
-  const c=gantt;
-  const ctx=c.getContext("2d");
-  c.width=c.clientWidth;
-  c.height=c.clientHeight;
-  ctx.clearRect(0,0,c.width,c.height);
-
-  let x=20;
-  schedule.forEach((s,i)=>{
-    const w=(s.end-s.start)*40;
-    ctx.fillStyle=uidColor(i);
-    ctx.fillRect(x,100,w,30);
-    ctx.fillStyle="#000";
-    ctx.fillText(s.pid,x+w/2,120);
-    ctx.fillText(s.start,x,140);
-    ctx.fillText(s.end,x+w,140);
-    x+=w;
-  });
+function renderTable(){
+    let rows = "";
+    processes.forEach(p=>{
+        rows += `
+        <tr>
+            <td>${p.pid}</td>
+            <td>${p.burst}</td>
+            <td>${p.priority}</td>
+            <td class="${p.freq === 'HIGH' ? 'high' : 'low'}">${p.freq || "-"}</td>
+            <td>${p.energy || "-"}</td>
+        </tr>`;
+    });
+    document.getElementById("ptable").innerHTML = rows;
 }
 
-runBtn.onclick=()=>{
-  const p=parseInput(procInput.value);
-  const sch=fcfs(p);
-  scheduleText.textContent=sch.map(s=>`${s.pid} [${s.start}, ${s.end}]`).join('\n');
-  metrics(sch,p);
-  draw(sch);
-};
-
-clearBtn.onclick=()=>{
-  procInput.value="";
-  metricsBody.innerHTML="";
-  scheduleText.textContent="";
-  gantt.getContext("2d").clearRect(0,0,gantt.width,gantt.height);
-};
+function log(msg){
+    document.getElementById("activityLog").innerHTML +=
+        `<div class="activity">${msg}</div>`;
+}
 </script>
 
 </body>
